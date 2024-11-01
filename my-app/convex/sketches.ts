@@ -2,77 +2,52 @@ import { internalAction, internalMutation, mutation, query } from "./_generated/
 import { internal } from "./_generated/api";
 import Replicate from "replicate";
 import { Id } from "./_generated/dataModel";
-
-export const saveSketch = mutation(
-    async ({ db, scheduler }, { prompt, image }: { prompt: string, image: string }) => {
-        const sketch = await db.insert("sketches", {
-            prompt: prompt,
-            image: image,
-            createdAt: Date.now()
-        });
-
-        console.log("sketch", sketch);
-
-        await scheduler.runAfter(0, internal.sketches.generate, {
-            sketchId: sketch,
-            prompt: prompt,
-            image: image
-        });
-
-        return sketch;
-    }
-);
+import { v } from "convex/values";
 
 
-export const generate = internalAction(
-    async ({ runMutation }, { sketchId, prompt, image }: { sketchId: Id<string>; prompt: string; image: string }) => {
+/**
+ * Save the sketch to the database and generate the image
+ */
+export const saveSketch = mutation({
+    args: { prompt: v.string(), image: v.string() },
+    handler: async (ctx, { prompt, image }) => {
 
-        const replicate = new Replicate();
-
-        const input = {
-            image,
-            scale: 7,
+        const sketch = await ctx.db.insert("sketches", {
             prompt,
-            image_resolution: "512", // Changed to a valid value
-            n_prompt: "lowres, text, cropped, worst quality, low quality, jpeg artifacts, ugly, duplicate, morbid, mutilated, extra fingers, mutated hands, poorly drawn hands, poorly drawn face, mutation, deformed, blurry, dehydrated, bad anatomy, bad proportions, extra limbs, cloned face, disfigured, gross proportions, malformed limbs, missing arms, missing legs, extra arms, extra legs, fused fingers, too many fingers, long neck"
-        };
+        });
 
+        await ctx.scheduler.runAfter(0, internal.generate.generate, {
+            sketchId: sketch,
+            prompt,
+            image
+        });
 
-        const output = await replicate.run(
-            "jagilley/controlnet-scribble:435061a1b5a4c1e26740464bf786efdfa9cb3a3ac488595a2de23e143fdb0117",
-            { input }
-        ) as string[];
-
-
-        runMutation(internal.sketches.updateSketchResult, {
-            sketchId,
-            result: output[1],
-        })
-
-    }
-)
-
-
-export const updateSketchResult = internalMutation(
-    async ({ db }, { sketchId, result }: { sketchId: Id<string>; result: string }) => {
-        await db.patch(sketchId, {
-            result: result
-        })
-    }
-)
-
-export const getSketches = query(
-    async ({ db }) => {
-        const sketches = await db.query('sketches').collect();
-        return sketches
-    }
-)
-
-
-
-export const getSketch = query(
-    async ({ db }, { sketchId }: { sketchId: Id<string> }) => {
-        const sketch = await db.get(sketchId);
         return sketch;
     }
-)
+});
+
+
+
+export const getSketch = query({
+    args: { sketchId: v.id("sketches") },
+    handler: (ctx, { sketchId }) => {
+      if (!sketchId) return null;
+      return ctx.db.get(sketchId);
+    },
+  });
+  
+  export const updateSketchResult = internalMutation({
+    args: { sketchId: v.id("sketches"), result: v.string() },
+    handler: async (ctx, { sketchId, result }) => {
+      await ctx.db.patch(sketchId, {
+        result,
+      });
+    },
+  });
+  
+  export const getSketches = query({
+    handler: async (ctx) => {
+      const sketches = await ctx.db.query("sketches").collect();
+      return sketches;
+    },
+  });

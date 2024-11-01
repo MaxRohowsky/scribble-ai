@@ -19,7 +19,6 @@ export default function Home() {
 
   const sketchQuery = useQuery(api.sketches.getSketch, sketchId ? { sketchId } : "skip"); // Use "skip" instead of null
 
-  console.log("sketchQuery", sketchQuery);
 
   const {
     register,
@@ -32,6 +31,8 @@ export default function Home() {
 
   const canvasRef = useRef<any>(null);
 
+
+  console.log("sketchQuery, ", sketchQuery);
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-between p-24">
@@ -46,10 +47,9 @@ export default function Home() {
           if (!canvasRef.current) return;
           const image = await canvasRef.current.exportImage("jpeg");
 
-          console.log("image", image);
 
           const result = await saveSketchMutation({ ...formData, image });
-          console.log(result);
+          setSketchId(result);
 
         })}>
         <input className="w-full" {...register("prompt", { required: true })} />
@@ -68,6 +68,7 @@ export default function Home() {
           strokeColor="#000000"
         />
 
+        {console.log("Sketch Query Result:", sketchQuery)} 
         {sketchQuery && <img src={sketchQuery.result} alt="sketch" />}
 
 
